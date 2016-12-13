@@ -10,15 +10,15 @@ In order to get the data you will need to be logged in you Bloomberg account
 
 # HOW TO INSTALL
 In VBA (Alt+F11):
-  Create a new Class and call it (for example): C_Bloom
-  Insert the code
-  Done Installing!
+    Create a new Class and call it (for example): C_Bloom
+    Insert the code
+    Done Installing!
 
 # WHERE TO FIND FIELDS
 The Fields relating tot he data you are looking for can be found form your terminal.
-1. Go to a ticker you are interested in
-2. Type the function FLDS in your terminal
-3. Search the information you are looking for
+    1. Go to a ticker you are interested in
+    2. Type the function FLDS in your terminal
+    3. Search the information you are looking for
 
 # GETTING STARTED
 In VBA (Alt+F11):
