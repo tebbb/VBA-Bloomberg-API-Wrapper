@@ -4,26 +4,26 @@ A VBA Class that enables you to querry a wide range of Bloomberg Data with simpl
 You can request Reference Data, Historical Data and for those with an AIM subscription: Positions Data.
 
 # REQUIREMENTS
-Bloomberg Desktop installed with Excel Add-in installed
-In VBA (Alt+F11) enable in Tools->References: Bloomberg API COM 3.5 Type Library
-In order to get the data you will need to be logged in you Bloomberg account
+    Bloomberg Desktop installed with Excel Add-in installed
+    In VBA (Alt+F11) enable in Tools->References: Bloomberg API COM 3.5 Type Library
+    In order to get the data you will need to be logged in you Bloomberg account
 
 # HOW TO INSTALL
-In VBA (Alt+F11):
+    In VBA (Alt+F11):
     Create a new Class and call it (for example): C_Bloom
     Insert the code
     Done Installing!
 
 # WHERE TO FIND FIELDS
-The Fields relating tot he data you are looking for can be found form your terminal.
+    The Fields relating tot he data you are looking for can be found form your terminal.
     1. Go to a ticker you are interested in
     2. Type the function FLDS in your terminal
     3. Search the information you are looking for
 
 # GETTING STARTED
-In VBA (Alt+F11):
-  Insert a Module
-  Insert the following Code:
+    In VBA (Alt+F11):
+    Insert a Module
+    Insert the following Code:
 
 ```
 '--> Reference Data <--
