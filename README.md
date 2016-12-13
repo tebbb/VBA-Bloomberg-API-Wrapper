@@ -42,6 +42,7 @@ Public Sub TestBloom()
     
     BData=Bloom.referenceData(Tickers,Fields) 'Your data is now in BData
     
+    'Print the Data in the Immediate Window to see what we have (or explore BData yourself in the Locals Window)
     Dim i as integer, j as integer, PrintStr as string
     for i=1 to ubound(BData,1)
         PrintStr=""
@@ -50,8 +51,18 @@ Public Sub TestBloom()
         next j
         Debug.Print PrintStr
     next i
-  
+    
+    'Output should similar to:
+    USDEUR Curncy 0.9426 EUR
+    AAPL US Equity 113.3 USD
+    GT10 Govt 95.96875 USD
 End Sub
+```
+```
+'--> Historical Data <--
+```
+```
+'--> Poistions Data <--
 ```
 
 # CODE STRUCTURE
