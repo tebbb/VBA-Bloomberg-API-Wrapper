@@ -24,7 +24,7 @@ The Fields relating tot he data you are looking for can be found form your termi
 In VBA (Alt+F11):
   Insert a Module
   Insert the following Code:
-  
+
 '--> Reference Data <--
   Public Sub TestBloom()
     Dim Bloom as new C_Bloom  'Assuming you called your wrapper class C_Bloom
@@ -51,7 +51,7 @@ In VBA (Alt+F11):
     next i
   
   End Sub
-  
+ 
 # CODE STRUCTURE
 
 
