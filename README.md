@@ -25,8 +25,9 @@ In VBA (Alt+F11):
   Insert a Module
   Insert the following Code:
 
+'''
 '--> Reference Data <--
-  Public Sub TestBloom()
+Public Sub TestBloom()
     Dim Bloom as new C_Bloom  'Assuming you called your wrapper class C_Bloom
     Dim BData as Variant      'What will collect the data querried
     Dim Tickers() as String   'A List of Bloomberg Tickers starting at rank 1
@@ -50,8 +51,8 @@ In VBA (Alt+F11):
       debug.print PrintStr
     next i
   
-  End Sub
- 
+End Sub'''
+
 # CODE STRUCTURE
 
 
