@@ -60,11 +60,62 @@ End Sub
 ```
 ```
 '--> Historical Data <--
+Public Sub TestBloom()
+    Dim Bloom As New C_Bloom
+    Dim BData As Variant
+    Dim Tickers() As String
+    Dim Fields() As String
+    Dim StartD As Date
+    Dim EndD As Date
+    
+    ReDim Tickers(1 To 3), Fields(1 To 2)
+    Tickers(1) = "USDEUR Curncy"
+    Tickers(2) = "AAPL US Equity"
+    Tickers(3) = "GT10 Govt"
+    Fields(1) = "PX_LAST"
+    Fields(2) = "CHG_PCT_1D"
+    StartD = Date - 20
+    EndD = Date
+    
+    BData = Bloom.historicalData(Tickers, Fields, StartD, EndD) 'Your data is now in BData
+    
+    Dim i As Integer, j As Integer, PrintStr As String
+    For i = 1 To UBound(BData, 1)   'Going through the Tickers
+        Debug.Print BData(i, 0)
+        For k = 1 To UBound(BData(i, 1), 1) 'Going through the Dates
+            PrintStr = ""
+            For j = 1 To UBound(Fields) + 1 'Going through the Fields
+                PrintStr = PrintStr & "  " & BData(i, j)(k)
+            Next j
+            Debug.Print PrintStr
+        Next k
+    Next i
+    
+End Sub
 ```
 ```
-'--> Poistions Data <--
+'--> Positions Data <--
 ```
 
 # CODE STRUCTURE
+```
+I Three accessible Functions for each type of data request:
+        referenceData
+        historicalData
+        PortfolioPositionData
+    They take the inputs and check for errors, convert dates to the Bloomberg format, call the general sub for data request and return   the data once it is ready.
 
+II  The ProcessDataRequest and its 3 dependent Functions:
+        ProcessDataRequest
+        OpenService
+        SendRequest
+        catchServerEvent
+    ProcessDataRequest is called by the accessible functions. It coordinates the different steps of a request: opening a service (with OpenService), sending a request (with SendRequest), and listening for an answer from Bloomberg (with catchServerEvent). If any error occurs the function will return false to ProcessDataRequest and it can close the object cleanly and raise an appropriate error.
+    
+III Three server data processing functions:
+        getServerData_reference
+        getServerData_historical
+        getServerData_portfolio
+    These will be called by the catchServerEvent depending on the request sent. They purpouse is to structure the data for output and catch errors returned by Bloomberg.
+```
 
