@@ -4,7 +4,7 @@ A VBA Class that enables you to querry a wide range of Bloomberg Data with simpl
 You can request Reference Data, Historical Data and for those with an AIM subscription: Positions Data.
 
 # REQUIREMENTS
-    Bloomberg Desktop installed with Excel Add-in installed
+    Bloomberg Desktop installed with Excel Add-in installed (and a valid subscription)
     In VBA (Alt+F11) enable in Tools->References: Bloomberg API COM 3.5 Type Library
     In order to get the data you will need to be logged in you Bloomberg account
 
@@ -20,7 +20,7 @@ You can request Reference Data, Historical Data and for those with an AIM subscr
     2. Type the function FLDS in your terminal
     3. Search the information you are looking for
 
-# GETTING STARTED
+# GETTING STARTED EXAMPLES
     In VBA (Alt+F11):
     Insert a Module
     Insert the following Code:
@@ -143,4 +143,6 @@ III. Three server data processing functions:
         getServerData_historical,
         getServerData_portfolio. 
     These will be called by the catchServerEvent depending on the request sent. They purpouse is to structure the data for output and catch errors returned by Bloomberg.
+    
+IV. The Data returned: is in a matrix of type variant in order to support the different data types returned by Bloomberg
 
