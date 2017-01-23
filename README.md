@@ -125,7 +125,6 @@ End Sub
 ```
 
 # CODE STRUCTURE
-```
 I Three accessible Functions for each type of data request:
         referenceData
         historicalData
@@ -144,5 +143,4 @@ III Three server data processing functions:
         getServerData_historical
         getServerData_portfolio
     These will be called by the catchServerEvent depending on the request sent. They purpouse is to structure the data for output and catch errors returned by Bloomberg.
-```
 
