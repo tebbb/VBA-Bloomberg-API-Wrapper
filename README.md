@@ -123,7 +123,6 @@ Public Sub TestBloom()
     
 End Sub
 ```
-```
 
 # CODE STRUCTURE
 ```
