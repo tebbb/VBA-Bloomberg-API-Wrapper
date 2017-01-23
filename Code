@@ -1,0 +1,758 @@
+'Works for reference Data, Bluk reference, Historical Data, and Positions from AIM services (Requires specific subscription)
+'Data Returned is from (1,1) coordinates
+'In the (0,x), or (x,0) there are usually Descriptive Fields (eg:Tickers or Field Names)
+
+Option Explicit
+
+Private Enum ENUM_REQUEST_TYPE
+    REFERENCE_DATA = 1
+    HISTORICAL_DATA = 2
+    PORTFOLIO_DATA = 3
+End Enum
+
+'Constants
+Private Const CONST_SERVICE_TYPE_REF        As String = "//blp/refdata"
+Private Const CONST_SERVICE_TYPE_PRT        As String = "//blp/tseapi"
+Private Const CONST_REQUEST_TYPE_REFERENCE  As String = "ReferenceDataRequest"
+Private Const CONST_REQUEST_TYPE_HISTORICAL As String = "HistoricalDataRequest"
+Private Const CONST_REQUEST_TYPE_PORTFOLIO  As String = "EapiRequestPosition"
+Private Const PX                            As Integer = 2030
+Private Const PX_NAME                       As String = "2030: CARMIGNAC GEST.;AIM"
+
+'Private data structures
+Private bInputSecurityArray()       As String
+Private bInputFieldArray()          As String
+Private bOutputArray                As Variant
+Private bOverrideFieldArray()       As String
+Private bOverrideValueArray()       As Variant
+
+'Session Objects
+Private bSession                    As blpapicomLib2.session
+Private bService                    As blpapicomLib2.service
+Private bRequest                    As blpapicomLib2.request
+Private bEvent                      As blpapicomLib2.Event
+
+'Request Data Objects
+Private bRequestType                As ENUM_REQUEST_TYPE
+Private bSecurities()               As String
+Private bFields()                   As String
+Private bStartDate                  As String
+Private bEndDate                    As String
+Private bErrorType                  As String
+Private bentityType                 As String
+Private bentityName                 As String
+
+'Overrides Data Objects
+Private bOverrides                  As Element
+Private bOverrideFields()           As String
+Private bOverrideValues()           As Variant
+Private bcalendarCodeOverride       As String
+Private bcurrencyCode               As String
+Private bnonTradingDayFillOption    As String
+Private bnonTradingDayFillMethod    As String
+Private bperiodicityAdjustment      As String
+Private bperiodicitySelection       As String
+Private bmaxDataPoints              As Long
+Private bpricingOption              As String
+Private bincludeCash                As Boolean
+
+
+Private Sub Class_Initialize()
+    'Nothing
+End Sub
+Private Sub Class_Terminate()
+    'Cleaning up or Terminate the Class without crashing Excel (in case Terminate did not trigger)
+    Call Terminate
+End Sub
+
+Private Sub Terminate()
+    'Cleans up the objects
+    Set bOutputArray = Nothing
+    Set bEvent = Nothing
+    Set bRequest = Nothing
+    Set bService = Nothing
+    On Error Resume Next
+        bSession.Stop
+    On Error GoTo 0
+    Set bSession = Nothing
+End Sub
+
+Public Function referenceData(Tickers() As String, _
+                              Fields() As String, _
+                              Optional overrideFields As Variant, _
+                              Optional overrideValues As Variant) As Variant
+    'Gets the Reference Data
+    Dim i As Integer
+    
+    '1. Take the Mandatory Data
+    bRequestType = REFERENCE_DATA
+    bSecurities = Tickers
+    bFields = Fields
+    
+    '2. Take the Option Data
+    If Not VBA.IsMissing(overrideFields) = True Then bOverrideFields = overrideFields
+    If Not VBA.IsMissing(overrideValues) = True Then bOverrideValues = overrideValues
+    If IsEmpty(bOverrideFields) <> IsEmpty(bOverrideValues) Then
+        Err.Raise vbObjectError, "C_Bloom", "Override Fields and Values are not defined properly!"
+    ElseIf IsEmpty(bOverrideFields) = True Then
+        If UBound(bOverrideFields, 1) <> UBound(bOverrideValues, 1) Then
+            Err.Raise vbObjectError, "C_Bloom", "Override Fields are of different Size!"
+        End If
+    End If
+    
+    '3. Process the Request
+    ReDim bOutputArray(0 To UBound(bSecurities, 1), 0 To UBound(bFields))
+    For i = 1 To UBound(bFields)
+        bOutputArray(0, i) = bFields(i)
+    Next i
+    Call ProcessDataRequest
+    
+    '4. Return some Data
+    referenceData = bOutputArray
+    Call Terminate
+    
+End Function
+
+Public Function historicalData(Tickers() As String, _
+                              Fields() As String, _
+                              StartDate As Date, _
+                              EndDate As Date, _
+                              Optional calendarCodeOverride As Variant, _
+                              Optional currencyCode As Variant, _
+                              Optional nonTradingDayFillOption As Variant, _
+                              Optional nonTradingDayFillMethod As Variant, _
+                              Optional periodicityAdjustment As Variant, _
+                              Optional periodicitySelection As Variant, _
+                              Optional maxDataPoints As Variant, _
+                              Optional pricingOption As Variant, _
+                              Optional overrideFields As Variant, _
+                              Optional overrideValues As Variant) As Variant
+    'Gets Historical Data
+    Dim i As Integer
+    
+    '1. Take the Mandatory Data
+    bRequestType = HISTORICAL_DATA
+    bSecurities = Tickers
+    bFields = Fields
+    If CDbl(StartDate) = 0 Then
+        Err.Raise vbObjectError, "C_Bloom", "Invalid Start Date!"
+        Exit Function
+    Else
+        bStartDate = ConvertDateToBloomberg(StartDate)
+    End If
+    If CDbl(EndDate) = 0 Then
+        Err.Raise vbObjectError, "C_Bloom", "Invalid End Date!"
+    Else
+        bEndDate = ConvertDateToBloomberg(EndDate)
+    End If
+    If CDbl(StartDate) > CDbl(EndDate) Then
+        Err.Raise vbObjectError, "C_Bloom", "Start Date must be before the End Date!"
+    End If
+    
+    '2. Take the Option Data
+    If Not VBA.IsMissing(overrideFields) = True Then bOverrideFields = overrideFields
+    If Not VBA.IsMissing(overrideValues) = True Then bOverrideValues = overrideValues
+    If IsEmpty(bOverrideFields) <> IsEmpty(bOverrideValues) Then
+        Err.Raise vbObjectError, "C_Bloom2", "Override Fields and Values are not defined properly!"
+    ElseIf IsEmpty(bOverrideFields) = True Then
+        If UBound(bOverrideFields, 1) <> UBound(bOverrideValues, 1) Then
+            Err.Raise vbObjectError, "C_Bloom2", "Override Fields are of different Size!"
+        End If
+    End If
+    If Not VBA.IsMissing(calendarCodeOverride) = True Then bcalendarCodeOverride = calendarCodeOverride             'CDR <GO>
+    If Not VBA.IsMissing(currencyCode) = True Then bcurrencyCode = currencyCode                                     'CCY ISO-3
+    If Not VBA.IsMissing(nonTradingDayFillOption) = True Then bnonTradingDayFillOption = nonTradingDayFillOption    'NON_TRADING_WEEKDAYS;ALL_CALENDAR_DAYS;ACTIVE_DAYS_ONLY
+    If Not VBA.IsMissing(nonTradingDayFillMethod) = True Then bnonTradingDayFillMethod = nonTradingDayFillMethod    'PREVIOUS_VALUE;NIL_VALUE
+    If Not VBA.IsMissing(periodicityAdjustment) = True Then bperiodicityAdjustment = periodicityAdjustment          'ACTUAL;CALENDAR;FISCAL
+    If Not VBA.IsMissing(periodicitySelection) = True Then bperiodicitySelection = periodicitySelection             'DAILY;WEEKLY;MONTHLY;QUARTERLY;SEMI_ANNUALLY;YEARLY
+    If Not VBA.IsMissing(maxDataPoints) = True Then bmaxDataPoints = maxDataPoints                                  '
+    If Not VBA.IsMissing(pricingOption) = True Then bpricingOption = pricingOption                                  'PRINCING_OPTION_PRICE;PRICING_OPTION_YIELD
+    
+    '3. Process the Request
+    ReDim bOutputArray(0 To UBound(bSecurities, 1), 0 To UBound(bFields) + 1) 'the +1 is to contain the Date
+    bOutputArray(0, 1) = "date"
+    For i = 1 To UBound(bFields)
+        bOutputArray(0, i + 1) = bFields(i)
+    Next i
+    Call ProcessDataRequest
+    
+    '4. Return some Data
+    historicalData = bOutputArray
+    Call Terminate
+    
+End Function
+
+Public Function PortfolioPositionData(accountType As String, _
+                                      accountName As String, _
+                                      Fields() As String, _
+                                      Optional includeCash As Variant)
+    'Gets TSADF or MAV Position Data
+    
+    '1. Take the Mandatory Data
+    bRequestType = PORTFOLIO_DATA
+    bentityType = accountType
+    bentityName = accountName
+    bFields = Fields
+    
+    '2. Take the Optional Data
+    If Not VBA.IsMissing(includeCash) = True Then bincludeCash = includeCash
+    
+    '3. Process the Request
+    Set bOutputArray = Nothing
+    Call ProcessDataRequest
+    
+    '4. Return Some Data
+    PortfolioPositionData = bOutputArray
+    Call Terminate
+
+End Function
+                                      
+Private Function ConvertDateToBloomberg(DblDate As Date) As String
+    'Converts a normal Date to a bloomberg formated Date
+    Dim D As Integer, M As Integer, Y As Integer
+    D = Day(DblDate): M = Month(DblDate): Y = Year(DblDate)
+    If D < 10 And M < 10 Then
+        ConvertDateToBloomberg = Y & "0" & M & "0" & D
+    ElseIf D < 10 Then
+        ConvertDateToBloomberg = Y & M & "0" & D
+    ElseIf M < 10 Then
+        ConvertDateToBloomberg = Y & "0" & M & D
+    Else
+        ConvertDateToBloomberg = Y & M & D
+    End If
+    
+End Function
+
+Private Sub ProcessDataRequest()
+    'Processes the Request
+    Dim ValidStep As Boolean
+    
+    '1. Start the Session and Service
+    ValidStep = OpenService
+    If ValidStep = False Then
+        Call Terminate
+        Err.Raise vbObjectError, "C_Bloom2", "Error in Opening Session or Service!"
+        Exit Sub
+    End If
+    
+    '2. Send the Request
+    ValidStep = SendRequest
+    If ValidStep = False Then
+        Call Terminate
+        Err.Raise vbObjectError, "C_Bloom2", "Error: Could not send the Request!"
+        Exit Sub
+    End If
+    
+    '3. Process the Incoming Events
+    Call catchServerEvent
+    
+End Sub
+
+Private Function OpenService() As Boolean
+    'Opens the Sessions and the Service
+    Set bSession = New blpapicomLib2.session
+    bSession.QueueEvents = True
+    On Error Resume Next
+        bSession.Start
+        If Err.Number <> 0 Or bSession Is Nothing Then
+            OpenService = False
+            Exit Function
+        End If
+    On Error GoTo 0
+    
+    On Error Resume Next
+        If bRequestType = HISTORICAL_DATA Or bRequestType = REFERENCE_DATA Then
+            bSession.OpenService (CONST_SERVICE_TYPE_REF)
+            Set bService = bSession.GetService(CONST_SERVICE_TYPE_REF)
+        ElseIf bRequestType = PORTFOLIO_DATA Then
+            bSession.OpenService (CONST_SERVICE_TYPE_PRT)
+            Set bService = bSession.GetService(CONST_SERVICE_TYPE_PRT)
+        End If
+        If Err.Number <> 0 Or bService Is Nothing Then
+            OpenService = False
+            Exit Function
+        End If
+    On Error GoTo 0
+    OpenService = True
+End Function
+
+Private Function SendRequest() As Boolean
+    'Sends the Request
+    Dim i As Integer, override As Element
+    Select Case bRequestType
+        Case REFERENCE_DATA
+            Set bRequest = bService.CreateRequest(CONST_REQUEST_TYPE_REFERENCE)
+            For i = 1 To UBound(bSecurities, 1)
+                If bSecurities(i) <> "" Then
+                    bRequest.GetElement("securities").AppendValue bSecurities(i)
+                Else
+                    bRequest.GetElement("securities").AppendValue "SomethingToStopCrashes"
+                End If
+            Next i
+            For i = 1 To UBound(bFields, 1)
+                If bFields(i) <> "" Then
+                    bRequest.GetElement("fields").AppendValue bFields(i)
+                Else
+                    bRequest.GetElement("fields").AppendValue "SomethingToStopCrashes"
+                End If
+            Next i
+            On Error Resume Next
+            If UBound(bOverrideFields, 1) > 0 Then
+                If Err.Number = 0 Then
+                    On Error GoTo 0
+                    Set bOverrides = bRequest.GetElement("overrides")
+                    For i = 1 To UBound(bOverrideFields, 1)
+                        Set override = bOverrides.AppendElment()
+                        override.SetElement "fieldId", bOverrideFields(i)
+                        override.SetElement "value", bOverrideValues(i)
+                    Next i
+                Else
+                    Err.Clear
+                    On Error GoTo 0
+                End If
+            End If
+            On Error Resume Next
+                bSession.SendRequest bRequest
+                If Err.Number <> 0 Then
+                    SendRequest = False
+                Else
+                    SendRequest = True
+                End If
+            On Error GoTo 0
+            
+        Case HISTORICAL_DATA
+            Set bRequest = bService.CreateRequest(CONST_REQUEST_TYPE_HISTORICAL)
+            For i = 1 To UBound(bSecurities, 1)
+                If bSecurities(i) <> "" Then
+                    bRequest.GetElement("securities").AppendValue bSecurities(i)
+                Else
+                    bRequest.GetElement("securities").AppendValue "SomethingToStopCrashes"
+                End If
+            Next i
+            For i = 1 To UBound(bFields, 1)
+                If bFields(i) <> "" Then
+                    bRequest.GetElement("fields").AppendValue bFields(i)
+                Else
+                    bRequest.GetElement("fields").AppendValue "SomethingToStopCrashes"
+                End If
+            Next i
+            On Error Resume Next
+            If UBound(bOverrideFields, 1) > 0 Then
+                If Err.Number = 0 Then
+                    On Error GoTo 0
+                    Set bOverrides = bRequest.GetElement("overrides")
+                    For i = 1 To UBound(bOverrideFields, 1)
+                        Set override = bOverrides.AppendElment()
+                        override.SetElement "fieldId", bOverrideFields(i)
+                        override.SetElement "value", bOverrideValues(i)
+                    Next i
+                Else
+                    Err.Clear
+                    On Error GoTo 0
+                End If
+            End If
+            bRequest.Set "startDate", bStartDate
+            bRequest.Set "endDate", bEndDate
+            If bcalendarCodeOverride <> "" Then bRequest.Set "calendarCodeOverride", bcalendarCodeOverride
+            If bcalendarCodeOverride <> "" Then bRequest.Set "calendarCodeOverride", bcalendarCodeOverride
+            If bcurrencyCode <> "" Then bRequest.Set "currencyCoden", bcurrencyCode
+            If bnonTradingDayFillOption <> "" Then bRequest.Set "nonTradingDayFillOption", bnonTradingDayFillOption
+            If bnonTradingDayFillMethod <> "" Then bRequest.Set "nonTradingDayFillMethod", bnonTradingDayFillMethod
+            If bperiodicityAdjustment <> "" Then bRequest.Set "periodicityAdjustment", bperiodicityAdjustment
+            If bperiodicitySelection <> "" Then bRequest.Set "periodicitySelection", bperiodicitySelection
+            If bmaxDataPoints <> 0 Then bRequest.Set "maxDataPoints", bmaxDataPoints
+            If bpricingOption <> "" Then bRequest.Set "maxDataPoints", bmaxDataPoints
+            On Error Resume Next
+                bSession.SendRequest bRequest
+                If Err.Number <> 0 Then
+                    SendRequest = False
+                Else
+                    SendRequest = True
+                End If
+            On Error GoTo 0
+            
+        Case PORTFOLIO_DATA
+            Set bRequest = bService.CreateRequest(CONST_REQUEST_TYPE_PORTFOLIO)
+            bRequest.GetElement("pxNum").SetValue PX
+            bRequest.GetElement("pxName").SetValue PX_NAME
+            bRequest.GetElement("entityType").SetValue bentityType
+            bRequest.GetElement("entityName").SetValue bentityName
+            For i = 1 To UBound(bFields, 1)
+                If bFields(i) <> "" Then
+                    bRequest.GetElement("fields").AppendValue bFields(i)
+                Else
+                    bRequest.GetElement("fields").AppendValue "SomethingToStopCrahes"
+                End If
+            Next i
+            Dim parameterArray  As blpapicomLib2.Element
+            Dim myParam As blpapicomLib2.Element
+            Set parameterArray = bRequest.GetElement("internalParameters")
+            Set myParam = parameterArray.AppendElment()
+            myParam.GetElement("name").SetValue ("IncludeCash")
+            If bincludeCash = True Then
+                myParam.GetElement("value").SetValue ("Y")
+            Else
+                myParam.GetElement("value").SetValue ("N")
+            End If
+            On Error Resume Next
+                bSession.SendRequest bRequest
+                If Err.Number <> 0 Then
+                    SendRequest = False
+                Else
+                    SendRequest = True
+                End If
+            On Error GoTo 0
+        End Select
+        
+End Function
+
+Private Function catchServerEvent() As Boolean
+    ' Catches the events coming from Bloomberg
+    Dim TimeOut As Double: TimeOut = DateAdd("n", 5, Now()) 'MAX 5 MINUTES BEFORE TIMEOUT!
+    Dim bExit As Boolean: bExit = False
+    Do While Now() < TimeOut And bExit = False
+        Set bEvent = bSession.NextEvent
+        If (bEvent.EventType = PARTIAL_RESPONSE Or bEvent.EventType = RESPONSE) Then
+            
+            Select Case bRequestType
+                Case ENUM_REQUEST_TYPE.REFERENCE_DATA: catchServerEvent = getServerData_reference
+                Case ENUM_REQUEST_TYPE.HISTORICAL_DATA: catchServerEvent = getServerData_historical
+                Case ENUM_REQUEST_TYPE.PORTFOLIO_DATA: catchServerEvent = getServerData_portfolio
+            End Select
+            
+            If (bEvent.EventType = RESPONSE) Then bExit = True
+        End If
+    Loop
+    If IsEmpty(bOutputArray) = True And Now() >= TimeOut Then
+        catchServerEvent = False
+    End If
+End Function
+
+Private Function getServerData_reference() As Boolean
+    'Extracts the Data from a reference Data Request
+    Dim i As Integer, j As Integer, k As Integer, l As Integer, Secu As String
+    
+    Dim it As blpapicomLib2.MessageIterator
+    Set it = bEvent.CreateMessageIterator()
+    
+    Dim MSG As blpapicomLib2.Message, secData As blpapicomLib2.Element, _
+        security As blpapicomLib2.Element, Fields As blpapicomLib2.Element, _
+        field As blpapicomLib2.Element, bError As blpapicomLib2.Element, _
+        bBulkValues As blpapicomLib2.Element
+    Dim BulkDataField() As Variant, BulkDataSubField() As Variant, SecNumber As Integer, FldNumber As Integer
+    bErrorType = ""
+    Do While it.Next()
+        Set MSG = it.Message
+        'Error Handling
+        If MSG.AsElement.HasElement("responseError") Then
+            Set bError = MSG.GetElement("responseError")
+            bErrorType = bError.GetElement("subcategory")
+            Select Case bErrorType
+                Case "DAILY_LIMIT_REACHED", "MONTHLY_LIMIT_REACHED"
+                    MsgBox "You have reached a data limit: " & bErrorType & vbNewLine & "Contact Bloomberg to unlock more data", vbOKOnly, "Bloomberg Wrapper"
+                    getServerData_reference = False
+                    Exit Function
+                    
+                Case "INVALID_SECURITY_IDENTIFIER", _
+                     "INVALID_FIELD_DATA", _
+                     "TOO_MANY_OVERRIDES", _
+                     "INVALID_OVERRIDE_FIELD", _
+                     "NOT_APPLICABLE_TO_REF_DATA"
+                    MsgBox "Error in response detected: " & bErrorType & vbNewLine & "ABORTING", vbOKOnly, "Bloomberg Wrapper"
+                    getServerData_reference = False
+                    Exit Function
+                    
+                Case Else
+                    MsgBox "Unknown Error in response detected: " & bErrorType & vbNewLine & "ABORTING", vbOKOnly, "Bloomberg Wrapper"
+                    getServerData_reference = False
+                    Exit Function
+            End Select
+        End If
+        
+        Set secData = MSG.AsElement.GetElement("securityData")
+        For i = 1 To secData.NumValues
+            Set security = MSG.GetElement("securityData").GetValue(i - 1)
+            Secu = security.GetElement("security").Value
+            For j = 1 To UBound(bSecurities, 1)
+                If bSecurities(j) = Secu Then
+                    SecNumber = j
+                    bOutputArray(SecNumber, 0) = Secu
+                    Exit For
+                End If
+            Next j
+            If SecNumber = 0 Then
+                'We might not find the security because it has a non-supported character
+                For j = 1 To Len(Secu)
+                    If Asc(Mid(Secu, j, 1)) = 63 Then
+                        If j = 1 Then
+                            Secu = Right(Secu, Len(Secu) - 1)
+                            j = j - 1
+                        ElseIf j = Len(Secu) Then
+                            Secu = Left(Secu, Len(Secu) - 1)
+                        Else
+                            Secu = Left(Secu, j - 1) & Right(Secu, Len(Secu) - j)
+                            j = j - 1
+                        End If
+                    End If
+                Next j
+                For j = 1 To UBound(bSecurities, 1)
+                    If bSecurities(j) = Secu Then
+                        SecNumber = j
+                        bOutputArray(SecNumber, 0) = Secu
+                        Exit For
+                    End If
+                Next j
+            End If
+            Set Fields = security.GetElement("fieldData")
+            For j = 1 To Fields.NumElements
+                Set field = Fields.GetElement(j - 1)
+                'Find where to place the data of this Field
+                For k = 1 To UBound(bFields, 1)
+                    If field.Name = bFields(k) Then
+                        FldNumber = k
+                        Exit For
+                    End If
+                Next k
+                'Assign the Data
+                If field.IsArray = False Then
+                    If field.DataType = BLPAPI_INT32 Then   'Type not handled by current version of VBA
+                        bOutputArray(SecNumber, FldNumber) = CInt(field.Value)
+                    Else
+                        bOutputArray(SecNumber, FldNumber) = field.Value
+                    End If
+                Else
+                    'We have Bulk Data
+                    ReDim BulkDataField(1 To field.NumValues)
+                    For k = 1 To field.NumValues
+                        Set bBulkValues = field.GetValue(k - 1)
+                        ReDim BulkDataSubField(1 To bBulkValues.NumElements)
+                        For l = 1 To bBulkValues.NumElements
+                            If bBulkValues.GetElement(l - 1).DataType = BLPAPI_INT32 Then
+                                BulkDataSubField(l) = CInt(bBulkValues.GetElement(l - 1).Value)
+                            Else
+                                BulkDataSubField(l) = bBulkValues.GetElement(l - 1).Value
+                            End If
+                        Next l
+                        BulkDataField(k) = BulkDataSubField
+                    Next k
+                    bOutputArray(SecNumber, FldNumber) = BulkDataField
+                End If
+            Next j
+        Next i
+    Loop
+    getServerData_reference = True
+End Function
+Private Function getServerData_historical() As Boolean
+    'Extracts the Data from a historical Data Request
+    Dim i As Integer, j As Integer, k As Integer, l As Integer
+    Dim Secu As String
+    
+    Dim it As blpapicomLib2.MessageIterator
+    Set it = bEvent.CreateMessageIterator()
+    
+    Dim MSG As blpapicomLib2.Message, security As blpapicomLib2.Element, Fields As blpapicomLib2.Element, field As blpapicomLib2.Element, bError As blpapicomLib2.Element
+    Dim HistData() As Variant, fieldHistData() As Variant, NumfieldHist As Integer, SecNumber As Integer, FldNumber As Integer
+    bErrorType = ""
+    
+    Do While it.Next
+        Set MSG = it.Message
+        If MSG.AsElement.HasElement("responseError") Then
+            Set bError = MSG.GetElement("responseError")
+            bErrorType = bError.GetElement("subcategory")
+            Select Case bErrorType
+                Case "DAILY_LIMIT_REACHED", "MONTHLY_LIMIT_REACHED"
+                    MsgBox "You have reached a data limit: " & bErrorType & vbNewLine & "Contact Bloomberg to unlock more data", vbOKOnly, "Risk Monitor - Bloomberg Data"
+                    getServerData_historical = False
+                    Exit Function
+                    
+                Case "INVALID_SECURITY_IDENTIFIER", _
+                     "INVALID_START_END", _
+                     "INVALID_CURRENCY", _
+                     "NO_FIELDS", _
+                     "TOO_MANY_OVERRIDES", _
+                     "INVALID_FIELD", _
+                     "INVALID_OVERRIDE_FIELD", _
+                     "NOT_APPLICABLE_TO_HIST_DATA", _
+                     "NOT_APPLICABLE_TO_SECTOR"
+                    MsgBox "Error in response detected: " & bErrorType & vbNewLine & "ABORTING", vbOKOnly, "Bloomberg Wrapper"
+                    getServerData_historical = False
+                    Exit Function
+
+                Case Else
+                    MsgBox "Unknown Error in response detected: " & bErrorType & vbNewLine & "ABORTING", vbOKOnly, "Bloomberg Wrapper"
+                    getServerData_historical = False
+                    Exit Function
+            End Select
+        End If
+    
+        For i = 1 To MSG.AsElement.NumElements
+            Set security = MSG.GetElement("securityData")
+            Secu = security.GetElement("security").Value
+            For j = 1 To UBound(bSecurities, 1)
+                If bSecurities(j) = Secu Then
+                    SecNumber = j
+                    bOutputArray(SecNumber, 0) = Secu
+                    Exit For
+                End If
+            Next j
+            If SecNumber = 0 Then
+                'We might not find the security because it has a non-supported character
+                For j = 1 To Len(Secu)
+                    If Asc(Mid(Secu, j, 1)) = 63 Then
+                        If j = 1 Then
+                            Secu = Right(Secu, Len(Secu) - 1)
+                            j = j - 1
+                        ElseIf j = Len(Secu) Then
+                            Secu = Left(Secu, Len(Secu) - 1)
+                        Else
+                            Secu = Left(j - 1) & Right(Secu, Len(Secu) - j)
+                            j = j - 1
+                        End If
+                    End If
+                Next j
+                For j = 1 To UBound(bSecurities, 1)
+                    If bSecurities(j) = Secu Then
+                        SecNumber = j
+                        bOutputArray(SecNumber, 0) = Secu
+                        Exit For
+                    End If
+                Next j
+            End If
+            Set Fields = security.GetElement("fieldData")
+            If Fields.NumValues > 0 Then
+                ReDim HistData(1 To Fields.NumValues)
+                For j = 1 To Fields.NumValues
+                    Set field = Fields.GetValue(j - 1)
+                    'Find where to place the data of this Field
+                    ReDim fieldHistData(1 To UBound(bFields, 1) + 1)
+                    For k = 1 To field.NumElements
+                        If field.GetElement(k - 1).Name = "date" Then
+                            fieldHistData(1) = field.GetElement(k - 1).Value
+                        Else
+                            For l = 1 To UBound(bFields, 1)
+                                If field.GetElement(k - 1).Name = bFields(l) Then
+                                    If field.GetElement(k - 1).DataType = BLPAPI_INT32 Then
+                                        fieldHistData(l + 1) = CInt(field.GetElement(k - 1).Value)
+                                    Else
+                                        fieldHistData(l + 1) = field.GetElement(k - 1).Value
+                                    End If
+                                End If
+                            Next l
+                        End If
+                    Next k
+                    HistData(j) = fieldHistData
+                Next j
+                'Assign HistData to the bOutputArray
+                ReDim fieldHistData(1 To Fields.NumValues)
+                For j = 1 To UBound(bFields, 1) + 1
+                    For k = 1 To Fields.NumValues
+                        fieldHistData(k) = HistData(k)(j)
+                    Next k
+                    bOutputArray(SecNumber, j) = fieldHistData
+                Next j
+            End If
+        Next i
+    Loop
+    getServerData_historical = True
+End Function
+
+Private Function getServerData_portfolio()
+    'Gathers the Portfolio Data from EAPI (TSADF Service)
+    Dim i As Integer, j As Integer, k As Integer
+    
+    Dim it As blpapicomLib2.MessageIterator
+    Set it = bEvent.CreateMessageIterator()
+    
+    Dim MSG As blpapicomLib2.Message, PositionData As blpapicomLib2.Element, DataRows As blpapicomLib2.Element, NumPositions As Long, bError As blpapicomLib2.Element
+    bErrorType = ""
+    Do While it.Next
+        Set MSG = it.Message
+        If MSG.AsElement.HasElement("responseError") Then     'Even when there is an error it does not seem to be feeding
+            Set bError = MSG.GetElement("responseError")
+            bErrorType = bError.GetElement("category")
+            Select Case bErrorType
+                Case "DAILY_LIMIT_REACHED", "MONTHLY_LIMIT_REACHED"
+                    MsgBox "You have reached a data limit: " & bErrorType & vbNewLine & "Contact Bloomberg to unlock more data", vbOKOnly, "Risk Monitor - Bloomberg Data"
+                    getServerData_portfolio = False
+                    Exit Function
+                    
+                Case Else
+                    MsgBox "Error in response detected: " & bErrorType & vbNewLine & "ABORTING", vbOKOnly, "Bloomberg Wrapper"
+                    Debug.Print bError.GetElement("message").Print
+                    getServerData_portfolio = False
+                    Exit Function
+            End Select
+        End If
+        
+        If MSG.AsElement.HasElement("positionData") Then
+            Set PositionData = MSG.GetElement("positionData")
+            Set DataRows = PositionData.GetElement("dataRow")
+            NumPositions = DataRows.NumValues
+            
+            Dim PosOffset As Long  'If there was some previous data will position new data properly in bOutputArray
+            If TypeName(bOutputArray) = "Nothing" Then
+                PosOffset = 0
+                ReDim bOutputArray(0 To NumPositions, 0 To UBound(bFields, 1) + 2)  'NB: There is an offset of two to accomodate the Position Ticker and Name
+                bOutputArray(0, 1) = "TICKER": bOutputArray(0, 2) = "NAME"
+                For i = 1 To UBound(bFields, 1)
+                    bOutputArray(0, i + 2) = bFields(i)
+                Next i
+                
+            ElseIf TypeName(bOutputArray) <> "Nothing" Then  'ie already have some Data in it (eg: for Group Requests)
+                Dim TempOutputArray As Variant, NumOldData As Long
+                NumOldData = UBound(bOutputArray, 1): PosOffset = NumOldData
+                ReDim TempOutputArray(0 To NumOldData + NumPositions, 0 To UBound(bFields, 1) + 2)
+                TempOutputArray(0, 1) = "TICKER": TempOutputArray(0, 2) = "NAME"
+                For i = 1 To UBound(bFields, 1)
+                    TempOutputArray(0, i + 2) = bFields(i)
+                Next i
+                For i = 1 To UBound(bOutputArray, 1)
+                    For j = 1 To UBound(bOutputArray, 2)
+                        TempOutputArray(i, j) = bOutputArray(i, j)
+                    Next j
+                Next i
+                bOutputArray = TempOutputArray
+            End If
+            
+            Dim DataRow As blpapicomLib2.Element, SecurityItem As blpapicomLib2.Element, SecurityName As String, SecurityID As String, FieldDatas As blpapicomLib2.Element, NumFields As Integer
+            Dim FieldData As blpapicomLib2.Element, DataValue As blpapicomLib2.Element, FieldID As String, sValue As String, dValue As Double, iValue As Long
+            For i = 1 To NumPositions
+                Set DataRow = DataRows.GetValue(i - 1)
+                Set SecurityItem = DataRow.GetElement("securityItem")
+                SecurityName = SecurityItem.GetElement("securityName")
+                SecurityID = SecurityItem.GetElement("securityID")
+                bOutputArray(i + PosOffset, 1) = SecurityID
+                bOutputArray(i + PosOffset, 2) = SecurityName
+                
+                
+                Set FieldDatas = DataRow.GetElement("fieldData")
+                NumFields = FieldDatas.NumValues
+                For j = 1 To NumFields
+                    Set FieldData = FieldDatas.GetValue(j - 1)
+                    Set DataValue = FieldData.GetElement("data")
+                    FieldID = FieldData.GetElement("fieldId")
+                    For k = 1 To UBound(bFields, 1)
+                        If FieldID = bFields(k) Then
+                            If DataValue.HasElement("S") Then
+                                sValue = DataValue.GetElement("S")
+                                bOutputArray(i + PosOffset, k + 2) = sValue
+                            ElseIf DataValue.HasElement("D") Then
+                                dValue = DataValue.GetElement("D")
+                                bOutputArray(i + PosOffset, k + 2) = dValue
+                            ElseIf DataValue.HasElement("I") Then
+                                iValue = DataValue.GetElement("I")
+                                bOutputArray(i + PosOffset, k + 2) = iValue
+                            End If
+                            Exit For
+                        End If
+                    Next k
+                Next j
+            Next i
+        End If
+    Loop
+    
+End Function
+
+
+
+
