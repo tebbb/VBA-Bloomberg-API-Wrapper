@@ -95,6 +95,34 @@ End Sub
 ```
 ```
 '--> Positions Data <--
+Public Sub TestBloom()
+    Dim Bloom As New C_Bloom
+    Dim BData As Variant
+    Dim accountType As String   'Account, Group, ...
+    Dim accountName As String   'The Name of the account/Fund
+    Dim Fields() As String
+    
+    ReDim Fields(1 To 3)    'Note that there are two extra fields returned in front: Ticker and Name
+    Fields(1) = "POS_CN"
+    Fields(2) = "CNTRY_OF_RISK"
+    Fields(3) = "YELLOW_KEY"
+    
+    accountType = "Account"
+    accountName = "SOME_ACCOUNT_NAME"
+    
+    BData = Bloom.PortfolioPositionData(accountType, accountName, Fields)
+    
+    Dim i As Integer, j As Integer, PrintStr As String
+    For i = 1 To UBound(BData, 1)   'Going through the positions
+        PrintStr = ""
+        For j = 1 To UBound(BData, 2)   'Going through the Fields
+            PrintStr = PrintStr & "  " & BData(i, j)
+        Next j
+        Debug.Print PrintStr
+    Next i
+    
+End Sub
+```
 ```
 
 # CODE STRUCTURE
