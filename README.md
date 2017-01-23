@@ -126,21 +126,21 @@ End Sub
 
 # CODE STRUCTURE
 I. Three accessible Functions for each type of data request:
-        referenceData
-        historicalData
-        PortfolioPositionData
+        referenceData,
+        historicalData,
+        PortfolioPositionData. 
     They take the inputs and check for errors, convert dates to the Bloomberg format, call the general sub for data request and return   the data once it is ready.
 
 II.  The ProcessDataRequest and its 3 dependent Functions:
-        ProcessDataRequest
-        OpenService
-        SendRequest
-        catchServerEvent
+        ProcessDataRequest,
+        OpenService,
+        SendRequest,
+        catchServerEvent. 
     ProcessDataRequest is called by the accessible functions. It coordinates the different steps of a request: opening a service (with OpenService), sending a request (with SendRequest), and listening for an answer from Bloomberg (with catchServerEvent). If any error occurs the function will return false to ProcessDataRequest and it can close the object cleanly and raise an appropriate error.
     
 III. Three server data processing functions:
-        getServerData_reference
-        getServerData_historical
-        getServerData_portfolio
+        getServerData_reference,
+        getServerData_historical,
+        getServerData_portfolio. 
     These will be called by the catchServerEvent depending on the request sent. They purpouse is to structure the data for output and catch errors returned by Bloomberg.
 
