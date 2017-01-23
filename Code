@@ -605,7 +605,7 @@ Private Function getServerData_historical() As Boolean
                         ElseIf j = Len(Secu) Then
                             Secu = Left(Secu, Len(Secu) - 1)
                         Else
-                            Secu = Left(j - 1) & Right(Secu, Len(Secu) - j)
+                            Secu = Left(Secu,j - 1) & Right(Secu, Len(Secu) - j)
                             j = j - 1
                         End If
                     End If
