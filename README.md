@@ -1,4 +1,4 @@
-# VBA-Bloomberg-API-Wrapper
+# VBA Bloomberg API Wrapper
 
 A VBA Class that enables you to querry a wide range of Bloomberg Data with simplicity. Handles errors that Bloomberg might throw at you. 
 You can request Reference Data, Historical Data and for those with an AIM subscription: Positions Data.
