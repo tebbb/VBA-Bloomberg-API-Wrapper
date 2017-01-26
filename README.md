@@ -53,9 +53,9 @@ Public Sub TestBloom()
     next i
     
     'Output should similar to:
-    USDEUR Curncy 0.9426 EUR
-    AAPL US Equity 113.3 USD
-    GT10 Govt 95.96875 USD
+    'USDEUR Curncy 0.9426 EUR
+    'AAPL US Equity 113.3 USD
+    'GT10 Govt 95.96875 USD
 End Sub
 ```
 ```
