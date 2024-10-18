@@ -1,0 +1,360 @@
+Option Explicit
+' Note that the examples will print in the Immediate window
+' To view it: Ctrl+G
+
+'==== EXAMPLES ====
+' To run these put the cursor in the Sub, and press F5
+Private Sub Test_ReferenceData()
+    ' Will get Reference Data (equivalent of BDP) from BBG
+    
+    ' Create the BBG object
+    ' Note that if you are not using the code in the add-in format
+    ' ie you just copied the code in C_BBG, you can use instead:
+    ' dim BBG as New C_BBG, and skip the set
+    Dim BBG As C_BBG
+    Set BBG = Get_C_BBG()
+    
+    ' Fill the Tickers and Fields
+    Dim Tickers(1 To 2) As String, Fields(1 To 4) As String
+    Tickers(1) = "AAPL US Equity"
+    Tickers(2) = "CT10 Govt"
+    Fields(1) = "PX_LAST"
+    Fields(2) = "CRNCY"
+    Fields(3) = "DUR_ADJ_MID"
+    Fields(4) = "SOME_BAD_FIELD"
+    
+    ' Do the Request and catch the result
+    Dim BData As Variant
+    BData = BBG.ReferenceData(Tickers, Fields, SetErrorMessagesToEmpty:=True)
+    
+    ' Print the Result in the Debug Window
+    Call PrintArray_in_Immediate(BData, ClearWindow:=True)
+    
+End Sub
+
+Private Sub Test_ReferenceBulkData()
+    ' Will get Bulk Reference Data from BBG
+    
+    ' Create the BBG object
+    Dim BBG As C_BBG
+    Set BBG = Get_C_BBG()
+    
+    ' Fill the Tickers and Fields
+    Dim Tickers(1 To 2) As String, Fields(1 To 2) As String
+    Tickers(1) = "SPX Index"
+    Tickers(2) = "CT10 Govt"  ' Will not have Bulk Data
+    Fields(1) = "INDEX_MEMBERS_WEIGHTS"
+    Fields(2) = "CRNCY"
+    
+    ' Do the Request and Catch the Result
+    Dim BData As Variant
+    BData = BBG.ReferenceData(Tickers, Fields)
+    
+    ' Extract the Bulk Data
+    Dim i As Integer, j As Integer, HaveClearedWindow As Boolean
+    For i = 1 To UBound(BData, 1)
+        For j = 1 To UBound(BData, 2)
+            If IsArray(BData(i, j)) = True Then
+                ' We have Bulk Data, We print it seperately
+                If HaveClearedWindow = True Then
+                    Debug.Print BData(0, j) & " " & BData(i, 0) & vbNewLine
+                    Call PrintArray_in_Immediate(BData(i, j), ClearWindow:=False)
+                Else
+                    Debug.Print BData(0, j) & " " & BData(i, 0) & vbNewLine
+                    Call PrintArray_in_Immediate(BData(i, j), ClearWindow:=True)
+                    HaveClearedWindow = True
+                End If
+                ' Remove the Table from the general output Table
+                BData(i, j) = "BULK"
+            End If
+        Next j
+    Next i
+    
+    ' Print the Result in the Debug Window
+    If HaveClearedWindow = True Then
+        Call PrintArray_in_Immediate(BData, ClearWindow:=False)
+    Else
+        Call PrintArray_in_Immediate(BData, ClearWindow:=True)
+    End If
+    
+End Sub
+
+Private Sub Test_ReferenceData_WithOverrides()
+    ' Will get Reference Data and Apply some Overrides to the fields (one at a time only)
+    
+    ' Create the BBG object
+    Dim BBG As C_BBG
+    Set BBG = Get_C_BBG()
+    
+    ' Fill the Tickers and Fields
+    Dim Tickers(1 To 2) As String, Fields(1 To 2) As String
+    Tickers(1) = "AAPL US Equity"
+    Tickers(2) = "IBM US Equity"
+    Fields(1) = "CUR_MKT_CAP"
+    Fields(2) = "INTERVAL_HIGH"
+    
+    ' Generate the overrides
+    Dim OvFields(1 To 3) As String, OvValues(1 To 3) As Variant
+    ' Overrides for the CUR_MKT_CAP
+    OvFields(1) = "SCALING_FORMAT"
+    OvValues(1) = "MMM"  ' Billions
+    ' Overrides for the INTERVAL_HIGH
+    OvFields(2) = "END_DATE_OVERRIDE"
+    OvValues(2) = DateSerial(2023, 12, 31)
+    OvFields(3) = "START_DATE_OVERRIDE"
+    OvValues(3) = DateSerial(2023, 10, 1)
+    
+    ' Do the Request without the Overrides (to compare)
+    Dim BData_NoOV As Variant
+    BData_NoOV = BBG.ReferenceData(Tickers, Fields)
+    
+    'Print the Data without the Overrides
+    Call PrintArray_in_Immediate(BData_NoOV, ClearWindow:=True)
+    
+    ' Do the Request with the Overrides
+    Dim BData_OV As Variant
+    BData_OV = BBG.ReferenceData(Tickers, Fields, OvFields, OvValues)
+    
+    ' Print the Data with the Overrides
+    Call PrintArray_in_Immediate(BData_OV, ClearWindow:=False)
+    
+End Sub
+
+Private Sub Test_PortPositions()
+    ' Will fetch the Positions of a PORT (or PRTU) portfolio, and add the Modified Duration for the Fixed Income Positions
+    ' Note that you do not need to have the Portfolio Tickerised to get its positions
+    ' Get your Portfolio ID under: PRTU<GO>, it should have this format: U11111111-1
+    
+    ' Create the BBG Object
+    Dim BBG As C_BBG, BData As Variant
+    Set BBG = Get_C_BBG()
+    
+    ' Define the Tickers
+    Dim Tickers(1 To 2) As String, Fields() As String
+    Tickers(1) = "U12345678-1 Client"    ' REPLACE by YOUR PORTFOLIO
+    Tickers(2) = "U11111111-1 Client"
+    
+    ' Fetch the Name of the Portoflio and the Currency using the standard ReferenceDate request
+    Dim PortName As String, PortCCY As String
+    ReDim Fields(1 To 2)
+    Fields(1) = "PORTFOLIO_NAME"
+    Fields(2) = "PORTFOLIO_BASE_CURRENCY"
+    BData = BBG.ReferenceData(Tickers, Fields)
+    Call PrintArray_in_Immediate(BData, ClearWindow:=True)
+    
+    ' Fetch the Positions of the Portfolio
+    ReDim Fields(1 To 1)
+    Fields(1) = "PORTFOLIO_MPOSITION"
+    BData = BBG.PortfolioData(Tickers, Fields)
+    Call PrintArray_in_Immediate(BData, ClearWindow:=False)
+    
+End Sub
+
+Private Sub Test_HistoricalData()
+    ' Will get Historical Data (equivalent to BDH) from BBG
+    ' First Test with one Ticker, then with multiple Tickers
+    ' Note that we only need to create the BBG object once and then we can re-use it in the code
+    
+    ' Create the BBG Object
+    Dim BBG As C_BBG
+    Set BBG = Get_C_BBG()
+  
+    ' Fill the Tickers and Fields
+    Dim Tickers(1 To 2) As String, Fields(1 To 2) As String
+    Tickers(1) = "GT10 Govt"
+    
+    Fields(1) = "PX_LAST"
+    Fields(2) = "MOD_DUR"  ' This will be a bad field, and the top entry of the column will show the error code
+    
+    ' The Start and End Date
+    Dim StartD As Date, EndD As Date
+    StartD = DateSerial(2022, 12, 1)
+    EndD = DateSerial(2023, 1, 1)
+    
+    ' Get the Data
+    Dim BData As Variant
+    ' Note that the Tickers(2) which is an empty string is going to get ignored
+    BData = BBG.HistoricalData(Tickers, Fields, StartD, EndD)
+    Call PrintArray_in_Immediate(BData, ClearWindow:=True)
+    
+    ' Now with multiple Tickers
+    Tickers(2) = "GTDEM10Y Govt"
+    Dim BData2 As Variant
+    BData2 = BBG.HistoricalData(Tickers, Fields, StartD, EndD, OrderDescending:=False)  ' OrderDescending modified so that the youngest date (startDate) is at the top of the table
+    Call PrintArray_in_Immediate(BData, ClearWindow:=False)
+
+End Sub
+
+Private Sub Test_HistoricalData_WithOverrides()
+    ' Will get Historical Data with some overrides
+    ' NOTE that while one of the tickers is wrong, there is not error returned despite C_BBG looking for it
+    
+    ' Create the BBG Object
+    Dim BBG As C_BBG
+    Set BBG = Get_C_BBG()
+    
+    ' Fill the Tickers and Fields
+    Dim Tickers(1 To 2) As String, Fields(1 To 2) As String
+    Tickers(1) = "GT10 Equity"   ' Bad Ticker, will return no Data
+    Tickers(2) = "GTDEM10Y Govt"
+    
+    Fields(1) = "PX_LAST"
+    Fields(2) = "YLD_YTM_MID"
+    
+    ' The Start and End Date
+    Dim StartD As Date, EndD As Date
+    StartD = DateSerial(2022, 6, 1)
+    EndD = DateSerial(2023, 1, 1)
+    
+    ' The Time Step Override
+    ' Check the function definition in the C_BBG class for what is possible
+    Dim weeklyPeriod As String
+    weeklyPeriod = "WEEKLY"
+    
+    ' Get the Data
+    Dim BData As Variant
+    BData = BBG.HistoricalData(Tickers, Fields, StartD, EndD, periodicitySelection:=weeklyPeriod)
+    
+    ' Print the Data
+    Call PrintArray_in_Immediate(BData, ClearWindow:=True)
+    
+End Sub
+
+Private Sub Test_AIMPortfolioPositionData()
+    ' Fetches the positions of the AIM portfolio from BBG
+    ' !Note that you need to have an AIM subscription and have access to the account requested!
+    ' Note also that you will need to eddit the AccountType, AccountName, PX variables
+    ' to values from your set-up
+    
+    ' Create the BBG Object
+    Dim BBG As C_BBG
+    Set BBG = Get_C_BBG()
+    
+    ' Fill the Account Name and Type
+    Dim AccountType As String, AccountName As String
+    AccountType = "Account"
+    AccountName = "MYFUND"
+    
+    ' PX Data
+    Dim PX As Integer
+    PX = 1111
+    
+    ' The Fields
+    Dim Fields(1 To 5) As String
+    Fields(1) = "POS_CN"
+    Fields(2) = "CRNCY"
+    Fields(3) = "MARKET_SECTOR_DES"
+    Fields(4) = "SECURITY_TYP"
+    Fields(5) = "COUNTRY_ISO"
+    Fields(6) = "DELTA"
+    Fields(7) = "MARKET_VALUE_LOCAL"
+    Fields(8) = "LEVEL_1_TAG_NAME"
+    Fields(9) = "ASSET_TYPE"
+    
+    
+    ' Get the Data
+    Dim BData As Variant
+    BData = BBG.AIMPortfolioPositionData(AccountType, AccountName, Fields, PX)
+    
+    ' Print the Data
+    Call PrintArray_in_Immediate(BData, ClearWindow:=True)
+    
+End Sub
+Private Sub Test_AIMHistPortfolioPositionData()
+    ' Fetches the positions of the portfolio from BBG
+    ' !Note that you need to have an AIM subscription and have access to the account requested!
+    ' Note also that you will need to eddit the AccountType, AccountName, PX, Start Date and End Date variables
+    ' There is a limit on how far back you can look at the portfolio check with your account manager
+    ' to values from your set-up
+    
+    ' Create the BBG Object
+    Dim BBG As C_BBG
+    Set BBG = Get_C_BBG()
+    
+    ' Fill the Account Name and Type
+    Dim AccountType As String, AccountName As String
+    AccountType = "Account"
+    AccountName = "MYFUND"
+    
+    ' PX Data
+    Dim PX As Integer
+    PX = 1111
+    
+    ' The Fields
+    Dim Fields(1 To 5) As String
+    Fields(1) = "POS_CN"
+    Fields(2) = "CRNCY"
+    Fields(3) = "MARKET_SECTOR_DES"
+    Fields(4) = "SECURITY_TYP"
+    Fields(5) = "COUNTRY_ISO"
+    Fields(6) = "DELTA"
+    Fields(7) = "MARKET_VALUE_LOCAL"
+    Fields(8) = "LEVEL_1_TAG_NAME"
+    Fields(9) = "ASSET_TYPE"
+    
+    ' The Start and End Date
+    Dim StartD As Date, EndD As Date
+    EndD = Date - 5  ' 5 Days Ago
+    StartD = EndD - 5 ' 10 Days Ago
+    
+    ' Get the Data
+    Dim BData As Variant
+    BData = BBG.AIMHistPortfolioPositionData(AccountType, AccountName, Fields, PX, StartD, EndD)
+    
+    ' Print the Data
+    Call PrintArray_in_Immediate(BData, ClearWindow:=True)
+    
+End Sub
+
+
+'==== HELPER FUNCTIONS ====
+Private Sub PrintArray_in_Immediate(Data As Variant, Optional ClearWindow = True)
+    ' It will print the Array in the debug window (ie the Immediate Window)
+    ' If it is not oppened: View -> Immediate Window; or Ctrl+g
+    ' It will occasionally not print the data, you can add delay to the Application.Wait command
+    Dim i As Integer, j As Long, k As Integer
+    
+    '0. Clear the Immediate Window
+    If ClearWindow = True Then
+        ' Not using the SendKeys method as it is not relliable
+        ' strings printed after the call of sendkeys would also be cleared away
+        Debug.Print String(65535, vbCr)
+    End If
+    
+    ' 1. Print a New Line in case ClearWindow = False
+    If ClearWindow = False Then
+        Debug.Print vbNewLine
+    End If
+    
+    ' 2. Get the Colummn String Sizes
+    ' Extract the Max column length for clean printing
+    Dim Max_len() As Double
+    ReDim Max_len(LBound(Data, 2) To UBound(Data, 2))
+    For i = LBound(Data, 2) To UBound(Data, 2)
+        For j = LBound(Data, 1) To UBound(Data, 1)
+            If Max_len(i) < Len(CStr(Data(j, i))) Then
+                Max_len(i) = Len(CStr(Data(j, i)))
+            End If
+        Next j
+    Next i
+    
+    ' 3. Assemble the Message
+    Dim LineMSG As String, TotalMSG As String, Padding As Integer
+    For i = LBound(Data, 1) To UBound(Data, 1)
+        LineMSG = ""
+        For j = LBound(Data, 2) To UBound(Data, 2)
+            Padding = Max_len(j) - Len(CStr(Data(i, j)))
+            LineMSG = LineMSG & " | "
+            For k = 1 To Padding
+                LineMSG = LineMSG & " "
+            Next k
+            LineMSG = LineMSG & Data(i, j)
+        Next j
+        LineMSG = LineMSG & " |" & vbNewLine
+        TotalMSG = TotalMSG & LineMSG
+    Next i
+    
+    ' 4. Print the Message
+    Debug.Print "Output: " & vbNewLine
+    Debug.Print TotalMSG
+End Sub
