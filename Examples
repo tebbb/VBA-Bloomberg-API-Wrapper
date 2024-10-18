@@ -2,6 +2,14 @@ Option Explicit
 ' Note that the examples will print in the Immediate window
 ' To view it: Ctrl+G
 
+Public Function Get_C_BBG() As C_BBG
+    Set Get_C_BBG = New C_BBG
+End Function
+
+Public Function BBG_Version() As String
+    BBG_Version = C_BBG.Version()
+End Function
+
 '==== EXAMPLES ====
 ' To run these put the cursor in the Sub, and press F5
 Private Sub Test_ReferenceData()
