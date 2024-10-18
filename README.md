@@ -31,27 +31,27 @@ You can request Reference Data, Port Data, Historical Data. For those with AIM s
 
 # CODE STRUCTURE
 I. Five accessible Functions for each type of data request:
-        ReferenceData,
-        PortfolioData,
-        HistoricalData,
-        AIMPortfolioPositionData (UNTESTED),
-        AIMHistPortfolioPositionData (UNTESTED)
+        - ReferenceData,
+        - PortfolioData,
+        - HistoricalData,
+        - AIMPortfolioPositionData (UNTESTED),
+        - AIMHistPortfolioPositionData (UNTESTED)
     They take the inputs and check for errors, convert dates to the Bloomberg format, call catchServerEvent (II) and return the data once it is ready.
 
 II.  The Bloomberg interraction functions:
-        OpenSession
-        OpenService
-        catchServerEvent
+        - OpenSession
+        - OpenService
+        - catchServerEvent
     These private functions handle the connection to Bloomberg's API, the opening of the appropriate service depending on the request and the catching of messages coming from Bloomberg.
     catchServerEvent listens to Bloomberg and delegates the processing of messages to the appropriate functions (III).
     
 III. Five server data processing functions:
-        getServerData_reference,
-        getServerData_portfolio,
-        getServerData_historical,
-        getServerData_aimportfolio,
-        getServerData_aimhistportfolio
-    These will be called by the catchServerEvent depending on the request sent. Their purpouse is to structure the data for output and catch errors returned by Bloomberg
+        - getServerData_reference,
+        - getServerData_portfolio,
+        - getServerData_historical,
+        - getServerData_aimportfolio,
+        - getServerData_aimhistportfolio
+    These private functions will be called by the catchServerEvent depending on the request sent. Their purpouse is to structure the data for output and catch errors returned by Bloomberg
     
 IV. The Data returned: is in a matrix of type variant in order to support the different data types returned by Bloomberg
     Note that you can usually find descriptive data in the 0th column rows and the 0th row columns, the data itself starts at 1,1
